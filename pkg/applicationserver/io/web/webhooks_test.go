@@ -167,8 +167,12 @@ func TestWebhooks(t *testing.T) {
 						if controllable, ok := sink.(web.ControllableSink); ok {
 							go controllable.Run(ctx)
 						}
-						w := web.NewWebhooks(ctx, nil, registry, sink, downlinks)
-						sub := w.NewSubscription()
+						c := componenttest.NewComponent(t, &component.Config{})
+						as := mock.NewServer(c)
+						_, err := web.NewWebhooks(ctx, as, registry, sink, downlinks)
+						if err != nil {
+							t.Fatalf("Unexpected error %v", err)
+						}
 						for _, tc := range []struct {
 							Name    string
 							Message *ttnpb.ApplicationUp
@@ -368,7 +372,7 @@ func TestWebhooks(t *testing.T) {
 						} {
 							t.Run(tc.Name, func(t *testing.T) {
 								a := assertions.New(t)
-								err := sub.SendUp(ctx, tc.Message)
+								err := as.Publish(ctx, tc.Message)
 								if !a.So(err, should.BeNil) {
 									t.FailNow()
 								}
@@ -434,7 +438,10 @@ func TestWebhooks(t *testing.T) {
 			Component: c,
 			Server:    io,
 		}
-		w := web.NewWebhooks(ctx, testSink.Server, registry, testSink, downlinks)
+		w, err := web.NewWebhooks(ctx, testSink.Server, registry, testSink, downlinks)
+		if err != nil {
+			t.Fatalf("Unexpected error %v", err)
+		}
 		c.RegisterWeb(w)
 		componenttest.StartComponent(t, c)
 		defer c.Close()
